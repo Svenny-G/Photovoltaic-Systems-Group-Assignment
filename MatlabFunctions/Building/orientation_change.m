@@ -1,21 +1,30 @@
-desired_orientation = 'east';
+desired_orientation = 'west';
 
 if strcmp(desired_orientation,'east')
-    phi = 90;
+    phi = 0;
 elseif strcmp(desired_orientation,'south')
-    phi = 180;
-elseif strcmp(desired_orientation,'west')
     phi = 270;
+elseif strcmp(desired_orientation,'west')
+    phi = 180;
+elseif strcmp(desired_orientation,'north')
+    phi = 90;
+else
+    error('Unknown desired orientation');
 end
 
-skylines_2 = skylines;
 for module_orientation = {'landscape','portrait'}
-    load(strcat(module_orientation{1},'_skylines.mat'),'skylines','svf');
+    % Load from east-facing base files
+    load(strcat(module_orientation{1},'_skylines_east.mat'),'skylines','svf');
+
+    skylines_2 = skylines;
     for ii = 1:length(skylines)
         skylines_2{ii} = cellfun(@(x) x(:,[(phi+1):end 1:phi]),skylines{ii},...
             'UniformOutput',false);
     end
+
     skylines = skylines_2;
-    save(strcat(module_orientation{1},'_skylines_',desired_orientation,'.mat'),...
+
+    % Save rotated version
+    save(strcat(module_orientation{1},'_skylines_', desired_orientation, '.mat'),...
         'skylines','svf');
 end
