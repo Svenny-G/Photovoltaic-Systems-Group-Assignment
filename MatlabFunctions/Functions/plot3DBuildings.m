@@ -48,8 +48,12 @@ fig = figure('units','normalized','outerposition',[0 0 1 1]);
 ax = axes(fig);
 ax.NextPlot = 'add';
 
-patch('Faces',faces,'Vertices',vertices,'FaceVertexCData', ...
-    [0.3 0.3 0.3],'FaceColor','flat','EdgeAlpha',0.15);
+% patch('Faces',faces,'Vertices',vertices,'FaceVertexCData', ...
+%     [0.3 0.3 0.3],'FaceColor','flat','EdgeAlpha',0.15);
+
+patch('Faces', faces, 'Vertices', vertices, ...
+      'FaceColor', [0.3 0.3 0.3], 'EdgeColor', 'none', 'FaceAlpha', 1);
+
 axis equal
 ax.XLim = [xmin xmax];
 ax.YLim = [ymin ymax];
