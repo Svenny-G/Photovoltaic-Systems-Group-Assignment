@@ -13,3 +13,8 @@ and solar module orientation. this uses the provided function calculateShadingFa
 
 used provided function plotModulesOnRoof.m to plot module irradiation for all 8 roof segments. Note: couldn't find provided color bar limits
 Note2: plot of segment 8 seems weird
+
+## Problem 3
+Using the results from problem 2, the Irradience for position 1 in the relevant sector is calculated, from which the expected yearly energy yield is calculated for each of the four models of solar panels. From these results the yearly energy yield per € was calculated for each of the models after which the most cost-effective model was found to be the "Solar Tech TS60-6M3-280S"
+
+## Problem 4

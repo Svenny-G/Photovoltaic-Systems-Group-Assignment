@@ -1,5 +1,5 @@
-import Matlabfunctions.*
-import CustomFuncs.*
+import MatlabFunctions.*
+import CustomFunctions.*
 
 %% PROBLEM 1
 %  monthly electricity demand on the left y-axis and the monthly horizontal radiation on the right y-axis.
@@ -105,3 +105,13 @@ for segment = 1:8
         annual_kWh_per_m2, color_limits);
     title(sprintf('Segment %d - %s (chosen)', segment, chosen_orientation(segment)));
 end
+
+%% PROBLEM 3
+%calculate the expected yearly energy output for all four PV modules installed in module position 1 of your roof sector.
+[G_landscape_total, G_landscape_per_mod] = calculateTotalIrradiation(4, 'landscape', ...
+        G_Bn, G_Dh, G_Gh, Az, hs);
+E = G_landscape_per_mod(1)*1.7e-3*[0.172,0.184,0.196,0.19] %Calculate energy per annum for each of the four models in kwh/y
+'module yield per cost estimate'
+E./[0.41*280,0.46*310,0.62*330,0.56*310]
+
+%% PROBLEM 4
