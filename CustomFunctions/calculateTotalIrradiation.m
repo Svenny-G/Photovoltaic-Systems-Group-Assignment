@@ -1,4 +1,4 @@
-function [G_total, G_module_matrix] = calculateTotalIrradiation(s_ix, orientation, G_Bn, G_Dh, G_Gh, Az, hs)
+function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_ix, orientation, G_Bn, G_Dh, G_Gh, Az, hs)
 % Computes hourly total POA irradiance [W/m²] for all modules on a roof segment
 %
 % Inputs:
@@ -66,4 +66,7 @@ function [G_total, G_module_matrix] = calculateTotalIrradiation(s_ix, orientatio
 
     % Total POA irradiance per hour (summed over modules)
     G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2);
+
+    % Later problems require also hourly data per module
+    G_module_raw = G_direct_module + G_diffuse_module + G_albedo_module
 end
