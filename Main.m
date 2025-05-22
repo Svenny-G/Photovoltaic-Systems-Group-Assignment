@@ -135,3 +135,18 @@ G_module_raw;
 Module_temps = repmat(Ta,1,n_modules)+G_module_raw./(25*ones(length(FF),n_modules)+6.84*repmat(FF,1,n_modules)); %U0 and U1 were assumed to be 4.3 and 1.55 respectively based on values found here: https://pvpmc.sandia.gov/modeling-guide/2-dc-module-iv/module-temperature/faiman-module-temperature-model/
 %These parameters also replicate the NOCT cell temperature within 0.4 degrees
 BarPlotMonthavgModuleWorkingTemp(Module_temps,G_module_raw);
+
+%% PROBLEM 5
+% Report the average operating module efficiency (including a rough approximation of system
+% losses) and the installed PV power (in kilowatts peak) required to generate X% of the electricity
+% consumed annually5. Justify your approximation of the system losses. This step will give you a general
+% idea of the required number of modules for your case.
+
+%plan: first calculate average operating module efficiency for each hour of the year using TC Pmax and efficiency from the datasheet, then calculate expected yield per panel, assume external DC/AC efficiency 
+%assume FF = 74% (rough average between STC=75.0% and NOCT=73.3%), assume ideal diode
+G_module_mask = G_module_raw;
+G_module_mask(G_module_raw==0)=NaN;
+Module_Voc = 39.56*ones(length(FF),n_modules)+1.381e-23/1.602e-19*Module_temps.*log(G_module_mask/1000)-39.56*0.00312*(Module_temps-25*ones(length(FF),n_modules));
+Module_Isc = 9.46*G_module_mask/1000+9.46*0.0006*(Module_temps-25*ones(length(FF),n_modules));
+Module_Pmpp= 0.74*Module_Voc.*Module_Isc;
+Module_eff = Module_Pmpp./G_module_mask/1.7;
