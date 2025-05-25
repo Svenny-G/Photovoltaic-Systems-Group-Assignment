@@ -8,10 +8,11 @@ import CustomFunctions.*
 % load location data
 load('Locations/Aberdeen.mat');
 T_Aberdeen = table(N, FF, G_Bn, G_Dh, G_Gh, Az, hs, Ta, Ts);
+
 % disp(T_Aberdeen);
 % Variables from Aberdeen.mat
-% N:    wtf is this?                        (0-8)
-% FF:   Far-field shading factor            (dimensionless)
+% N:    Cloud cover                         (0-8)
+% FF:   Wind speed                          (m/s)
 % G_Bn: Beam Normal Irradiance              (W/m^2)
 % G_Dh: Diffuse Horizontal Irradiance       (W/m^2)
 % G_Gh: Global Horizontal Irradiance        (W/m^2)
@@ -68,7 +69,7 @@ for segment = 1:8
         G_Bn, G_Dh, G_Gh, Az, hs);
     [G_landscape_total, G_landscape_per_mod, G_module_raw] = calculateTotalIrradiation(segment, 'landscape', ...
         G_Bn, G_Dh, G_Gh, Az, hs);
-
+    
     % Sum total annual irradiation [Wh/m²]
     total_portrait = sum(G_portrait_total);
     total_landscape = sum(G_landscape_total);
@@ -139,14 +140,249 @@ BarPlotMonthavgModuleWorkingTemp(Module_temps,G_module_raw);
 %% PROBLEM 5
 % Report the average operating module efficiency (including a rough approximation of system
 % losses) and the installed PV power (in kilowatts peak) required to generate X% of the electricity
-% consumed annually5. Justify your approximation of the system losses. This step will give you a general
+% consumed annually. Justify your approximation of the system losses. This step will give you a general
 % idea of the required number of modules for your case.
 
 %plan: first calculate average operating module efficiency for each hour of the year using TC Pmax and efficiency from the datasheet, then calculate expected yield per panel, assume external DC/AC efficiency 
 %assume FF = 74% (rough average between STC=75.0% and NOCT=73.3%), assume ideal diode
-G_module_mask = G_module_raw;
-G_module_mask(G_module_raw==0)=NaN;
-Module_Voc = 39.56*ones(length(FF),n_modules)+1.381e-23/1.602e-19*Module_temps.*log(G_module_mask/1000)-39.56*0.00312*(Module_temps-25*ones(length(FF),n_modules));
-Module_Isc = 9.46*G_module_mask/1000+9.46*0.0006*(Module_temps-25*ones(length(FF),n_modules));
-Module_Pmpp= 0.74*Module_Voc.*Module_Isc;
-Module_eff = Module_Pmpp./G_module_mask/1.7;
+
+%Datasheet & constants
+Am = 1.7;
+STC_Pmod = 280;
+STC_Voc = 39.56;
+STC_Vmp = 31.90;
+STC_Isc = 9.46;
+STC_Imp = 8.80;
+STC_efficiency_mod = 0.1721;
+STC_T =25;
+TC_Isc = 0.069/100;
+TC_Voc = -0.312/100;
+TC_P = -0.432/100;             
+kb_T = 298.15*1.381e-23;
+q = 1.602e-19;
+
+annual_demand = sum(monthly_demand);
+
+%COMPUTED MODULE OPERATING EFFICIENCY-------------------------------------- 
+T25 = 25*ones(length(FF),n_modules);
+
+T_mod = Module_temps;
+
+G_mod_mask = G_module_raw;
+G_mod_mask(G_mod_mask<=0)=NaN;
+
+Mod_Voc = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T_mod.*log(G_mod_mask/1000)+STC_Voc*TC_Voc*(T_mod-T25);
+Mod_Isc = STC_Isc*G_mod_mask/1000 + STC_Isc*TC_Isc*(T_mod-T25);
+Mod_Pmpp= 0.74*Mod_Voc.*Mod_Isc;
+Mod_eff = Mod_Pmpp./G_mod_mask/Am;
+
+valid_hours = ~isnan(Mod_eff) & G_module_raw > 0 & Mod_eff > 0; 
+avg_operating_efficiency = mean(Mod_eff(valid_hours));
+avg_annual_irradiation = mean(sum(G_module_raw))*1e-3;
+avg_annual_energy_dc = mean(avg_annual_irradiation * avg_operating_efficiency * Am);
+
+
+%Approximated system losses
+losses_approx = 0.15;        
+
+avg_effective_efficiency = avg_operating_efficiency*(1-losses_approx);
+annual_yield = avg_annual_irradiation*avg_effective_efficiency;
+
+
+%Grid independence levels -> X% = 45%
+X_45 = 45;
+
+Req_generation_X = annual_demand * (X_45/100);
+Req_P = Req_generation_X / annual_yield;
+Num_Mod = ceil(Req_P*1000/STC_Pmod);
+Act_P = Num_Mod * STC_Pmod / 1000;
+
+Q5_resultsA_table = table(X_45', Req_generation_X, Req_P, Num_Mod, Act_P, ...
+    'VariableNames', {'Grid independence (%)', 'Req. generation (kWh/year)', ...
+                      'Req. power (kWp)', 'Number of modules (#)', 'Actual installed power (kWp)'});
+
+disp('=== RESULTS GRID INDEPENDENCE LEVELS WITH OPERATING EFFICIENCY COMPUTED ===');
+disp(Q5_resultsA_table);
+
+%% P5 OPTIONAL -> uncomment (Comparison of operating efficiency computed vs datasheet)
+
+% X_val = [10, 20, 25, 30, 45, 60, 65, 80, 100];
+% losses_approx = 0.15;
+% P5_Detailed_comparison_Xval_operatingeff_computed_vs_datasheet(monthly_demand,FF,n_modules,Module_temps,G_module_raw, losses_approx, X_val);
+
+%% PROBLEM 6
+% Optimize the distribution and interconnection of PV modules on the rooftop. Explain clearly in
+% the report (with a simple schematic) how many arrays (groups) of modules compose your PV system
+% and how are the modules in each array connected with each other and to the inverter. Try to minimize
+% the losses due to current mismatch between series-connected modules. Use the symbol below to
+% represent a PV module. Provide moreover a plot of the annual irradiation of only the modules that
+% compose your PV system, in the chosen mounting orientation. The limits of the color bar range will be
+% provided and depend on the city.
+
+[G_landscape_total, G_landscape_per_mod, G_module_raw] = calculateTotalIrradiation(4, 'landscape', ...
+    G_Bn, G_Dh, G_Gh, Az, hs);
+
+annual_irradiation_per_mod = G_landscape_per_mod * 1e-3;
+total_available_modules = length(annual_irradiation_per_mod);
+
+[sorted_irradiation, sort_idx] = sort(annual_irradiation_per_mod, 'descend');
+
+if Num_Mod <= total_available_modules
+    selected_module_idx = sort_idx(1:Num_Mod);
+    selected_irradiation = sorted_irradiation(1:Num_Mod);
+else
+    fprintf('Warning: Insufficient modules available! Using all %d modules.\n', total_available_modules);
+    selected_module_idx = sort_idx;
+    selected_irradiation = sorted_irradiation;
+    Num_Mod = total_available_modules;
+end
+
+Max_mod_strng = 20;  %From datasheet, 60 modules with 3 bypass diodes
+N_strngs = ceil(Num_Mod / Max_mod_strng);
+Mod_per_strng = floor(Num_Mod / N_strngs);
+Mod_remaining = mod(Num_Mod, N_strngs);
+
+%TABLE STRING CONFIGURATION
+Q6_strng_config_table = table(Max_mod_strng, N_strngs, Mod_per_strng, Mod_remaining, ...
+    'VariableNames', {'Target string size', 'Number of strings', 'Modules per string', ...
+                        'Extra modules to distribute'});
+disp('--- STRING CONFIGURATION ---');
+disp(Q6_strng_config_table);
+
+
+string_assignments = [];
+string_irradiation = cell(N_strngs, 1);
+string_modules = cell(N_strngs, 1);
+
+current_string = 1;
+direction = 1; 
+
+for i = 1:Num_Mod
+    string_assignments(end+1) = current_string;
+    current_string = current_string + direction;
+    
+    if current_string > N_strngs
+        current_string = N_strngs;
+        direction = -1;
+    elseif current_string < 1
+        current_string = 1;
+        direction = 1;
+    end
+end
+
+for s = 1:N_strngs
+    string_mask = (string_assignments == s);
+    string_modules{s} = selected_module_idx(string_mask);
+    string_irradiation{s} = selected_irradiation(string_mask);
+    String_ID(s) = s;
+    Modules_per_String(s) = length(string_modules{s});
+    Mean_Irradiation(s) = mean(string_irradiation{s});
+    Std_Irradiation(s) = std(string_irradiation{s});
+end
+
+%TABLE STRING CONFIGURATION OVERVIEW
+Q6_strng_config2_table = table(String_ID', Modules_per_String', Mean_Irradiation', Std_Irradiation', ...
+    'VariableNames', {'String_ID', 'Modules', 'Mean_Irradiation_kWh_m2', 'Std_Irradiation_kWh_m2'});
+disp('--- STRING CONFIGURATION OVERVIEW ---');
+disp(Q6_strng_config2_table);
+
+
+total_ideal_power = sum(selected_irradiation) * STC_efficiency_mod * Am * STC_Pmod / (STC_efficiency_mod * Am * 1000); 
+total_string_power = 0;
+
+for s = 1:N_strngs
+    min_irradiation_in_string = min(string_irradiation{s});
+    modules_in_string = length(string_modules{s});
+    string_power = min_irradiation_in_string * modules_in_string * STC_efficiency_mod * Am * STC_Pmod / (STC_efficiency_mod * Am * 1000);
+    total_string_power = total_string_power + string_power;
+end
+
+mismatch_loss_pct = (total_ideal_power - total_string_power) / total_ideal_power * 100;
+
+%TABLE MISMATCH VALUES
+Q6_mismatch_val_table = table(total_ideal_power, total_string_power, mismatch_loss_pct, ...
+    'VariableNames', {'Ideal annual energy (kWh)', 'String-limited energy (kWh)', 'Mismatch loss (%)'});
+disp('--- MISMATCH VALUES ---');
+disp(Q6_mismatch_val_table);
+
+
+%LAYOUT SPECS VALUES
+fprintf('\n--- LAYOUT SPECS VALUES ---\n');
+fprintf('- %d strings connected in parallel\n', N_strngs);
+fprintf('- Each string contains %d-%d modules in series\n', ...
+    min(cellfun(@length, string_modules)), max(cellfun(@length, string_modules)));
+fprintf('- All strings connected to a single inverter with %d MPPT input(s)\n', N_strngs);
+fprintf(' \n');
+
+
+String_ID2 = (1:N_strngs)';
+Modules2 = cell(N_strngs, 1);
+Mean_Irradiation2 = zeros(N_strngs, 1);
+Std_Irradiation2 = zeros(N_strngs, 1);
+
+for s = 1:N_strngs
+    modules_str = sprintf('%d,', string_modules{s});
+    Modules2{s} = modules_str(1:end-1); 
+    Mean_Irradiation2(s) = mean(string_irradiation{s});
+    Std_Irradiation2(s) = std(string_irradiation{s});
+end
+
+%TABLE STRING BREAKDOWN 
+Q6_strng_breakdown_table = table(String_ID2, Modules2, Mean_Irradiation2, Std_Irradiation2, ...
+          'VariableNames', {'String_ID', 'Modules', 'Mean_Irradiation_kWh_m2', 'Std_Irradiation_kWh_m2'});
+disp('--- STRING BREAKDOWN ---');
+disp(Q6_strng_breakdown_table);
+
+
+selected_mask = false(total_available_modules, 1);
+selected_mask(selected_module_idx) = true;
+
+color_limits = [300, 900];
+
+figure;
+modelfile = 'landscape_modules.mat';
+plotModulesOnRoof(modelfile, 4, selected_module_idx, 'irradiation', ...
+    selected_irradiation, color_limits);
+title(sprintf('Segment 4: %d modules (%.1f kWp)', ...
+    Num_Mod, Num_Mod * STC_Pmod / 1000));
+colorbar;
+saveas(gcf, fullfile('Figures', 'Problem6.fig'));
+
+
+%TABLE SUMMARY
+Q6_summary_table = table(Num_Mod, Num_Mod * STC_Pmod / 1000, N_strngs, ...
+    round(mean(cellfun(@length, string_modules))), total_string_power, ...
+    total_string_power / annual_demand * 100, mismatch_loss_pct, ...
+          'VariableNames', {'Total modules', 'System power (kWp)', 'Number of strings', ...
+    'Modules per string', 'Annual generation (kWh)', 'Grid independence (%)', 'Mismatch loss (%)'});
+disp('--- SUMMARY ---');
+disp(Q6_summary_table);
+
+%% DISCLAIMER, MOSTLY COPY PASTED FROM AI
+fprintf('\n=== ARRAY VISUALIZATION OF MODULES ===\n');
+for s = 1:N_strngs
+    figure('Name', sprintf('String %d Details', s), 'NumberTitle', 'off');
+    
+    current_string_modules = string_modules{s};
+    current_string_irradiation = string_irradiation{s};
+    
+    plotModulesOnRoof(modelfile, 4, current_string_modules, 'irradiation', ...
+        current_string_irradiation, color_limits);
+    
+    title(sprintf('String %d: %d Modules (%.1f±%.1f kWh/m²)', ...
+        s, length(current_string_modules), ...
+        mean(current_string_irradiation), std(current_string_irradiation)));
+    
+    colorbar;
+    text(0.98, 0.98, sprintf('Modules: [%s]', ...
+        sprintf('%d, ', current_string_modules)), ...
+        'Units', 'normalized', ...
+        'HorizontalAlignment', 'right', ...
+        'VerticalAlignment', 'bottom', ...
+        'BackgroundColor', 'white', ...
+        'EdgeColor', 'black', ...
+        'FontSize', 6, ...
+        'Interpreter', 'none');
+    
+    fprintf('Created figure for String %d with %d modules\n', s, length(current_string_modules));
+end
