@@ -12,7 +12,7 @@ function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_
 %
 % Output:
 %   G_total     - 8760x1 vector of total irradiance summed over all modules
-
+    Az_fix = Az+180;
     % Map segment to facing direction and tilt
     dirs = ["south", "north", "west", "east"];
     facing_map = [1 2 3 4 1 2 3 4];
@@ -68,5 +68,5 @@ function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_
     G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2);
 
     % Later problems require also hourly data per module
-    G_module_raw = G_direct_module + G_diffuse_module + G_albedo_module
+    G_module_raw = G_direct_module + G_diffuse_module + G_albedo_module;
 end
