@@ -174,32 +174,37 @@ G_mod_mask(G_mod_mask<=0)=NaN;
 Mod_Voc = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T_mod.*log(G_mod_mask/1000)+STC_Voc*TC_Voc*(T_mod-T25);
 Mod_Isc = STC_Isc*G_mod_mask/1000 + STC_Isc*TC_Isc*(T_mod-T25);
 Mod_Pmpp= 0.74*Mod_Voc.*Mod_Isc;
+Mod_Pmpp(Mod_Pmpp<=0)=NaN;
 Mod_eff = Mod_Pmpp./G_mod_mask/Am;
 
-valid_hours = ~isnan(Mod_eff) & G_module_raw > 0 & Mod_eff > 0; 
+valid_hours = ~isnan(Mod_eff) & G_module_raw > 0 & Mod_eff > 0 ;
 avg_operating_efficiency = mean(Mod_eff(valid_hours));
-avg_annual_irradiation = mean(sum(G_module_raw))*1e-3;
-avg_annual_energy_dc = mean(avg_annual_irradiation * avg_operating_efficiency * Am);
+% avg_annual_irradiation = mean(sum(G_module_raw))*1e-3;
+% avg_annual_energy_dc = mean(avg_annual_irradiation * avg_operating_efficiency * Am); %invalid calculation method: efficiency and irracience are not independent
 
 
 %Approximated system losses
-losses_approx = 0.15;        
+losses_approx = 0.15;       %decreased losses to 12% as this is more realistic for grid tied PV , based on inverter efficiency of 92% and other losses 4%
 
-avg_effective_efficiency = avg_operating_efficiency*(1-losses_approx);
-annual_yield = avg_annual_irradiation*avg_effective_efficiency;
-
+%effective_efficiency = mod_eff*(1-losses_approx); redundant
+%annual_yield = avg_annual_irradiation*avg_effective_efficiency; %invalid calculation method, see above
+annual_yield = (1-losses_approx)*sum(Mod_Pmpp,1,"omitnan")
 
 %Grid independence levels -> X% = 45%
 X_45 = 45;
 
-Req_generation_X = annual_demand * (X_45/100);
-Req_P = Req_generation_X / annual_yield;
-Num_Mod = ceil(Req_P*1000/STC_Pmod);
-Act_P = Num_Mod * STC_Pmod / 1000;
+Req_generation_X = annual_demand * (X_45/100)*1.1;
+%Num_Mod = Req_generation_X / mean(annual_yield/1000)
+%Num_Mod = ceil(Req_P*1000/STC_Pmod); redundant
 
-Q5_resultsA_table = table(X_45', Req_generation_X, Req_P, Num_Mod, Act_P, ...
+
+[selected_modules,num_panels_req,expected_yield] = Panelselection(annual_yield/1000,Req_generation_X)
+Req_P = num_panels_req * STC_Pmod / 1000;
+
+
+Q5_resultsA_table = table(X_45', Req_generation_X, Req_P, num_panels_req, expected_yield, ...
     'VariableNames', {'Grid independence (%)', 'Req. generation (kWh/year)', ...
-                      'Req. power (kWp)', 'Number of modules (#)', 'Actual installed power (kWp)'});
+                      'Installed power (kWp)', 'Number of modules (#)', 'Expeced yield (kWh/year)'});
 
 disp('=== RESULTS GRID INDEPENDENCE LEVELS WITH OPERATING EFFICIENCY COMPUTED ===');
 disp(Q5_resultsA_table);
@@ -219,26 +224,30 @@ disp(Q5_resultsA_table);
 % compose your PV system, in the chosen mounting orientation. The limits of the color bar range will be
 % provided and depend on the city.
 
-[G_landscape_total, G_landscape_per_mod, G_module_raw] = calculateTotalIrradiation(4, 'landscape', ...
-    G_Bn, G_Dh, G_Gh, Az, hs);
+% the below lines were made redundant by the new code of problem 5
 
-annual_irradiation_per_mod = G_landscape_per_mod * 1e-3;
-total_available_modules = length(annual_irradiation_per_mod);
+% [G_landscape_total, G_landscape_per_mod, G_module_raw] = calculateTotalIrradiation(4, 'landscape', ...
+%     G_Bn, G_Dh, G_Gh, Az, hs);
 
-[sorted_irradiation, sort_idx] = sort(annual_irradiation_per_mod, 'descend');
+% annual_irradiation_per_mod = G_landscape_per_mod * 1e-3;
+% total_available_modules = length(annual_irradiation_per_mod);
 
-if Num_Mod <= total_available_modules
-    selected_module_idx = sort_idx(1:Num_Mod);
-    selected_irradiation = sorted_irradiation(1:Num_Mod);
-else
-    fprintf('Warning: Insufficient modules available! Using all %d modules.\n', total_available_modules);
-    selected_module_idx = sort_idx;
-    selected_irradiation = sorted_irradiation;
-    Num_Mod = total_available_modules;
-end
+% [sorted_irradiation, sort_idx] = sort(annual_irradiation_per_mod, 'descend');
 
-Max_mod_strng = 20;  %From datasheet, 60 modules with 3 bypass diodes
-N_strngs = ceil(Num_Mod / Max_mod_strng);
+% if Num_Mod <= total_available_modules
+%     selected_module_idx = sort_idx(1:Num_Mod);
+%     selected_irradiation = sorted_irradiation(1:Num_Mod);
+% else
+%     fprintf('Warning: Insufficient modules available! Using all %d modules.\n', total_available_modules);
+%     selected_module_idx = sort_idx;
+%     selected_irradiation = sorted_irradiation;
+%     Num_Mod = total_available_modules;
+% end
+
+%Max_mod_strng = 20;  %From datasheet, 60 modules with 3 bypass diodes %incorrect likely
+Max_mod_string = floor(1000/max(max(Mod_Voc))*0.9)
+N_strngs = ceil(num_panels_req / Max_mod_strng);
+%% checked until here
 Mod_per_strng = floor(Num_Mod / N_strngs);
 Mod_remaining = mod(Num_Mod, N_strngs);
 

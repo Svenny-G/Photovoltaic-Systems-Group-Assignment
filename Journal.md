@@ -18,3 +18,6 @@ Note2: plot of segment 8 seems weird
 Using the results from problem 2, the Irradience for position 1 in the relevant sector is calculated, from which the expected yearly energy yield is calculated for each of the four models of solar panels. From these results the yearly energy yield per € was calculated for each of the models after which the most cost-effective model was found to be the "Solar Tech TS60-6M3-280S"
 
 ## Problem 4
+Calculated module temperatures for each module and each hour of the day using the Faiman model and validated the results against the limited data available from the datasheet (temperature is below NOCT for most of the year, which is expected from the weathercoditions in Aberdeen). Used this data to generate a barplot of average working temperature of the modules for each month of the year.
+
+## Problem 5
