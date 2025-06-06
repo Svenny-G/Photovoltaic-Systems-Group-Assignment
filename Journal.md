@@ -21,3 +21,21 @@ Using the results from problem 2, the Irradience for position 1 in the relevant 
 Calculated module temperatures for each module and each hour of the day using the Faiman model and validated the results against the limited data available from the datasheet (temperature is below NOCT for most of the year, which is expected from the weathercoditions in Aberdeen). Used this data to generate a barplot of average working temperature of the modules for each month of the year.
 
 ## Problem 5
+
+## Problem 6
+(overlaps with code from Problem 5)
+Used Panelselection.m to choose top modules reaching 45% grid independence (with optional safety margin).
+Calculated maximum modules per string using max(Voc) and 1000 V inverter constraint (with 10% safety buffer).
+Assigned modules to strings sequentially (preserving irradiation order).
+Computed mismatch losses:
+Ideal energy: all modules operate at their own irradiation.
+String energy: modules limited by weakest in their string.
+Output:
+String layout (string_modules), mismatch loss (%), summary and string-level tables.
+Visual plot of selected modules and optional per-string visualization.
+
+
+## Problem 7
+Calculated hourly DC power output for all strings using temperature-adjusted Voc and Isc values with calculateMPPForSeries.m.
+Implemented stepwise IV curve plotting at 12:00 on June 21st based on sorted Isc and cumulative Voc (current mismatch logic).
+Used stair-step approximation as in 'bypass diodes and mismatch losses.pdf'; saved plots as .fig for each string, and Table output as necessary.
