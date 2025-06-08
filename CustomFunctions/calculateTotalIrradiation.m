@@ -63,11 +63,11 @@ function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_
     end
     
     % Total annual irradiance per module in n_modules
-    G_module_matrix = sum(G_direct_module + G_diffuse_module + G_albedo_module, 1) / Am;  % [1 × N_modules]
+    G_module_matrix = sum(G_direct_module + G_diffuse_module + G_albedo_module, 1);  % [1 × N_modules]
 
     % Total POA irradiance per hour (summed over modules)
-    G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2) / Am;
+    G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2);
 
     % Later problems require also hourly data per module
-    G_module_raw = (G_direct_module + G_diffuse_module + G_albedo_module) / Am;
+    G_module_raw = (G_direct_module + G_diffuse_module + G_albedo_module);
 end
