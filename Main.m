@@ -517,11 +517,11 @@ string_details = cell(N_strings, 1);
 
 for s = 1:N_strings
     modules = string_modules{s};
-    n_modules = length(modules);
+    s_modules = length(modules);
     total_length = 0;
     connections = {}; 
 
-    for i = 1:(n_modules - 1) % Cable length of consecutive modules in string
+    for i = 1:(s_modules - 1) % Cable length of consecutive modules in string
         mod1 = modules(i);
         mod2 = modules(i + 1);
         pos1 = module_positions(mod1, :);
@@ -686,5 +686,34 @@ Bs = Psos.*(1+C2s.*(vmpp_sys-Vdcos));
 Cs = C0s.*(1+C3s.*(vmpp_sys-Vdcos));
 
 Pacs = (Pacos./(As-Bs)-Cs.*(As-Bs)).*(vmpp_sys-Bs)+Cs.*(vmpp_sys-Bs).*(vmpp_sys-Bs)
-[Pacmax, idx] = max(Pacs);
-Names(idx)
+[Pacmax, inv_idx] = max(Pacs);
+Names(inv_idx)
+
+
+%% PROBLEM 11
+% Perform hourly simulations to evaluate the annual energy yield of the PV system. Consider (at
+% least) the following losses in your analysis and report their magnitude in percentage:
+% a. Thermal losses. Report how much higher/lower is your annual DC yield compared to the case
+% when the modules operate at a constant temperature of 25°C (for this you need to repeat your
+% DC energy calculation assuming that the modules always stay at 25°C).
+% b. Mismatch losses. To compute this, compare the output DC power with the case when each
+% module has its own power optimizer.
+% c. DC cabling losses. Hint: these vary at every instant of time as a function of the current flowing
+% through each cable.
+% d. Inverter losses. Use the SNL model.
+% e. AC cable losses from the inverter to the grid connection. Assume them to be a fixed
+% percentage.
+
+%% 11a: Thermal losses
+%Datasheet & constants
+
+Mod_Voc = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T_mod.*log(G_mod_mask/1000)+STC_Voc*TC_Voc*(T_mod-T25);
+Mod_Isc = STC_Isc*G_mod_mask/1000 + STC_Isc*TC_Isc*(T_mod-T25);
+Mod_Pmpp= 0.74*Mod_Voc.*Mod_Isc;
+
+Mod_Voc25 = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T25.*log(G_mod_mask/1000);
+Mod_Isc25 = STC_Isc*G_mod_mask/1000;
+Mod_Pmpp25= 0.74*Mod_Voc25.*Mod_Isc25;
+
+Thermalloss = sum(Mod_Pmpp25(:,selected_modules),'omitnan')-sum(Mod_Pmpp(:,selected_modules),'omitnan')
+Thermallosspercent = Thermalloss/sum(Mod_Pmpp25(:,selected_modules),'omitnan')
