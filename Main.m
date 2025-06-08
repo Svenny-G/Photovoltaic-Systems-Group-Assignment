@@ -705,7 +705,6 @@ Names(inv_idx)
 % percentage.
 
 %% 11a: Thermal losses
-%Datasheet & constants
 
 Mod_Voc = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T_mod.*log(G_mod_mask/1000)+STC_Voc*TC_Voc*(T_mod-T25);
 Mod_Isc = STC_Isc*G_mod_mask/1000 + STC_Isc*TC_Isc*(T_mod-T25);
@@ -716,4 +715,33 @@ Mod_Isc25 = STC_Isc*G_mod_mask/1000;
 Mod_Pmpp25= 0.74*Mod_Voc25.*Mod_Isc25;
 
 Thermalloss = sum(Mod_Pmpp25(:,selected_modules),'omitnan')-sum(Mod_Pmpp(:,selected_modules),'omitnan')
-Thermallosspercent = Thermalloss/sum(Mod_Pmpp25(:,selected_modules),'omitnan')
+Thermallossfraction = Thermalloss/sum(Mod_Pmpp25(:,selected_modules),'omitnan')
+
+%% 11b: Mismatch losses
+DCafterMPPT = 0;
+for hour=1:length(FF)
+    if sum(Mod_Pmpp(hour,:),'omitnan')>0
+        iscs = [];
+        vocs = [];
+        for s = 1:N_strings
+            % Extract module indices for the current string
+            mod_ids = string_modules{s};
+            pad_iscs = [Mod_Isc(hour,mod_ids),zeros(1,(Max_mod_per_string-length(mod_ids)))];
+            pad_vocs = [Mod_Voc(hour,mod_ids),zeros(1,(Max_mod_per_string-length(mod_ids)))];
+            % Get hourly Isc and Voc for all modules in this string
+            iscs = vertcat(iscs,pad_iscs);
+            vocs = vertcat(vocs,pad_vocs);
+        end
+        vocs(isnan(vocs)) = 0;
+        iscs(isnan(iscs)) = 0;
+        [pmpp_sys, impp_sys, vmpp_sys, impp_str] = calculateMPPForParallel(iscs, vocs, Fill_Factor, STC_Imp, STC_Isc);
+        DCafterMPPT = DCafterMPPT + pmpp_sys;
+    end
+end
+Mod_Pmpp_mask = Mod_Pmpp;
+Mod_Pmpp_mask(Mod_Pmpp_mask<0)=NaN;
+min(DCafterMPPT)
+min(Mod_Pmpp_mask)
+Mismatchloss = sum(Mod_Pmpp_mask(:,selected_modules),'omitnan')-DCafterMPPT
+max(Mismatchloss)
+Mismatchfrac = Mismatchloss/sum(Mod_Pmpp_mask(:,selected_modules),'omitnan')
