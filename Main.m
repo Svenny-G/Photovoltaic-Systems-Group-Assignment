@@ -582,7 +582,7 @@ fprintf('TOTAL DISTANCE OF CABLES: %.1fm\n', Cables_total);
 
 % VISUALIZATION 
 figure('Name', 'Cable layout', 'Position', [80, 100, 1000, 600]);
-colors = {"red", 'green'};
+colors = {"red", 'green', 'magenta'};
 
 %PLOT - PV modules
 scatter(module_positions(:, 1), module_positions(:, 2), 500, 'square', 'b','filled',  ...
@@ -671,12 +671,20 @@ vocs(isnan(vocs)) = 0;
 iscs(isnan(iscs)) = 0;
 [pmpp_sys, impp_sys, vmpp_sys, impp_str] = calculateMPPForParallel(iscs, vocs, Fill_Factor, STC_Imp, STC_Isc);
 
-Names = ['Fronius International GmbH: Fronius Primo 3.8-1 208-240 [240V]','Fronius International GmbH: Fronius Primo 5.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 6.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 7.6-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 8.2-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 10.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 11.4-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 12.5-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 15.0-1 208-240 [240V]']
-Psos = [53.2488, 40.4138, 50.0694, 38.7693, 37.9417, 44.2769, 49.1389, 45.21, 55.7458]
-Pacos = []
+Names = ["'Fronius International GmbH: Fronius Primo 3.8-1 208-240 [240V]'","'Fronius International GmbH: Fronius Primo 5.0-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 6.0-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 7.6-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 8.2-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 10.0-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 11.4-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 12.5-1 208-240 [240V]'", "'Fronius International GmbH: Fronius Primo 15.0-1 208-240 [240V]'"];
+Psos = [53.2488, 40.4138, 50.0694, 38.7693, 37.9417, 44.2769, 49.1389, 45.21, 55.7458];
+Pacos = [3800, 5000, 6000, 7600, 8200, 9995, 11400, 12500, 15000];
+Pdcos = [3911.35, 5130.29, 6164.9, 7802.58, 8417.25, 10296, 11738.7, 12866.7, 15456.2];
+Vdcos = [650, 660, 660, 660, 660, 655, 660, 660, 680];
+C0s = [-3.14E-06, -2.12E-06, -1.91E-06, -1.48E-06, -1.24E-06, -8.00E-07, -6.68E-07, -3.93E-07, -7.60E-07];
+C1s = [-2.96E-05, -2.76E-05, -2.49E-05, -2.80E-05, -2.48E-05, -2.81E-05, -3.28E-05, -3.59E-05, -2.76E-05];
+C2s = [-4.80E-05, -0.000426916, -0.000198599, -0.000607413, -0.000605738, -0.000619957, -0.000723615, -0.00148254, -0.000709219];
+C3s = [0.000276228, 0.000107843, -0.000136111, -0.000576395, -0.000454246, 0.000286398, -0.000765126, -0.00376868, -0.000288637];
 
+As = Pdcos.*(1+C1s.*(vmpp_sys-Vdcos));
+Bs = Psos.*(1+C2s.*(vmpp_sys-Vdcos));
+Cs = C0s.*(1+C3s.*(vmpp_sys-Vdcos));
 
-% Table to summarize string stats
-% Inverter_table = table(Names, Pso, Paco, Pdco, Vdco, C0, C1, C2, C3, ...
-%     'VariableNames', {'Name', 'Pso', 'Paco','Pdco', 'Vdco', 'C0', 'C1', 'C2','C3'});
-
+Pacs = (Pacos./(As-Bs)-Cs.*(As-Bs)).*(vmpp_sys-Bs)+Cs.*(vmpp_sys-Bs).*(vmpp_sys-Bs)
+[Pacmax, idx] = max(Pacs);
+Names(idx)
