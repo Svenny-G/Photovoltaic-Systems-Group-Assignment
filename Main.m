@@ -475,3 +475,179 @@ disp(IV_table);
 end
 
 %% PROBLEM 8
+% The inverter(s) shall be placed in a room on the ground floor. Point “O” on the roof – as marked
+% in the file Buildings Roofs and Modules.pdf – is the entry point for all cables going from any roof sectors
+% to the inverter room. For your PV array layout determine the distance of the cables interconnecting the
+% modules with each other and the inverter. If the PV modules are next to each other, no additional cable
+% is needed. Consider that the distance from point “O” on the roof to the inverter(s) is 20 m. Bring all the
+% cables to the inverter room in case of a system with several strings.
+
+total_modules = num_panels_req;
+modules_in_row = 9;
+modules_in_col = 9;
+grid_spacing_x = 1.7;  
+grid_spacing_y = 1; 
+
+
+%MODULE POSITION CALCULATION
+module_positions = zeros(81, 2);
+
+for mod_id = 1:81
+    row = mod(mod_id - 1, modules_in_row) + 1;  
+    col = ceil(mod_id / modules_in_row);    
+    x_pos = (col - 1) * grid_spacing_x;
+    y_pos = (9-row) * grid_spacing_y;
+    
+    module_positions(mod_id, :) = [x_pos, y_pos];
+end
+
+
+% CABLE DISTANCE CALCULATION FUNCTION
+% Euclidean distance between two modules
+function distance = calculateCableDistance(pos1, pos2)
+    distance = sqrt((pos1(1) - pos2(1))^2 + (pos1(2) - pos2(2))^2);
+end
+
+
+% CALCULATE CABLE LENGTH OF STRING
+string_cable_lengths = zeros(N_strings, 1);
+string_details = cell(N_strings, 1);
+
+for s = 1:N_strings
+    modules = string_modules{s};
+    n_modules = length(modules);
+    total_length = 0;
+    connections = {}; 
+
+    for i = 1:(n_modules - 1) % Cable length of consecutive modules in string
+        mod1 = modules(i);
+        mod2 = modules(i + 1);
+        pos1 = module_positions(mod1, :);
+        pos2 = module_positions(mod2, :);
+        cable_length = calculateCableDistance(pos1, pos2);
+
+        if cable_length <= 1.7 %No cable if modules border
+            cable_length = 0;
+        end
+
+        total_length = total_length + cable_length;
+        connections{end+1} = sprintf('  %d→%d: %.1fm', mod1, mod2, cable_length);
+    end
+    
+    string_cable_lengths(s) = total_length;
+    string_details{s} = connections;
+end
+
+total_inter_module_cables = sum(string_cable_lengths);
+
+
+% POINT O  CABLE ROUTING
+O_to_inverter_distance = 20;  % Distance O to inverter
+point_O = [0,0];  % Point O is at the origin
+string_to_O_distances = zeros(N_strings, 1); % Calculate distances from each string to Point O
+
+
+for s = 1:N_strings   % Find module closest to O in string
+    modules = string_modules{s};
+    min_distance = inf;
+    closest_module = modules(1);
+    
+    for mod_id = modules
+        pos = module_positions(mod_id, :);
+        dist = calculateCableDistance(pos, point_O);
+
+        if dist < min_distance
+            min_distance = dist;
+            closest_module = mod_id;
+        end
+    end
+    string_to_O_distances(s) = min_distance;
+end
+
+Strings_table = transpose([compose('String %d', 1:N_strings), 'TOTAL strings']);
+string_to_O_distances_table = transpose([transpose(string_to_O_distances),sum(string_to_O_distances)]);
+O_to_inverter_distances_table = transpose([O_to_inverter_distance*ones(1, N_strings), N_strings*O_to_inverter_distance]);
+string_cable_lengths_table = transpose([transpose(string_cable_lengths), total_inter_module_cables]);
+Cables_total = sum(string_to_O_distances) + N_strings*O_to_inverter_distance + total_inter_module_cables;
+
+Q8_table = table(Strings_table, string_to_O_distances_table, O_to_inverter_distances_table, string_cable_lengths_table, ...
+    'VariableNames', {'String ID', 'Cables string to O (m)', 'Cables O to inverter (m)', 'Cables inter module (m)'});
+disp('--- CABLES OVERVIEW TABLE ---');
+disp(Q8_table);
+
+fprintf('TOTAL DISTANCE OF CABLES: %.1fm\n', Cables_total);
+
+
+% VISUALIZATION 
+figure('Name', 'Cable layout', 'Position', [80, 100, 1000, 600]);
+colors = {"red", 'green'};
+
+%PLOT - PV modules
+scatter(module_positions(:, 1), module_positions(:, 2), 500, 'square', 'b','filled',  ...
+    'DisplayName', 'PV modules');
+hold on;
+
+%PLOT - Point O
+plot(point_O(1), point_O(2), 'ko', 'MarkerSize', 12, 'MarkerFaceColor', 'yellow', ...
+    'DisplayName', 'Point O');
+
+%PLOT - Legenda strings
+for s = 1:N_strings
+    plot(0,0,  colors{s}, 'LineWidth', 1.2,'DisplayName', sprintf('String %d', s));
+end
+
+%PLOT - String modules + cables
+for s = 1:N_strings
+    modules = string_modules{s};
+    positions = module_positions(modules, :);
+    scatter(positions(:, 1), positions(:, 2), 100, colors{s}, 's', 'filled','DisplayName', sprintf('String %d modules', s));
+        for i = 1:(length(modules) - 1)
+        pos1 = module_positions(modules(i), :);
+        pos2 = module_positions(modules(i+1), :);
+        plot([pos1(1), pos2(1)], [pos1(2), pos2(2)], colors{s}, 'LineWidth', 1.2, 'HandleVisibility', 'off');
+    end
+end
+
+%PLOT - String to O cables
+for s = 1:N_strings
+    x_offset = ((-1)^s)*(0.01*s);
+    plot([x_offset,x_offset], [0, string_to_O_distances(s)], ...
+        '--', 'Color', colors{s}, 'LineWidth', 1.1,'DisplayName', sprintf('String %d to O', s));
+end
+
+
+xlabel('X (m)');
+ylabel('Y (m)');
+title('Cable layout - segment 4');
+legend('Location', 'southeast');
+grid on;
+axis normal;
+saveas(gcf, fullfile('Figures', 'Problem8.fig'));
+
+
+%% PROBLEM 9
+% Choose the DC cables from the following table to connect the system to the inverter. Assume
+% that all the cables are made of copper, are protected from light and that each railway contains only one
+% pair of cables
+
+cable_options = [4, 0.92;6, 1.23; 10, 1.61]; % mm², €/m
+
+safety_factor = 1.56;
+req_Icap = STC_Isc * safety_factor; 
+fprintf('Required current capacity (with safety factor): %.2f A\n', req_Icap);
+fprintf('All cables satisfy: %.2f A\n');
+fprintf('\n');
+
+
+% Current carrying capacity for DC copper cables (retrieved online)
+current_capacity = [33, 44, 66]; % Amperes for 4, 6, 10 mm²
+
+
+for i = 1:size(cable_options, 1)
+    fprintf('DC cable: %.2f mm2\n', cable_options(i,1));
+    fprintf('Cost of cables: %.2f €\n',cable_options(i,2) * Cables_total);
+end
+
+%% PROBLEM 10
+% Choose the inverter(s) from the table provided. Clearly explain your DC/AC ratio choice. Assume
+% that each inverter has only one MPPT7
