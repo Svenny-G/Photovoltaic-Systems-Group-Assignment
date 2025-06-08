@@ -113,7 +113,15 @@ end
         G_Bn, G_Dh, G_Gh, Az, hs);
 E = G_landscape_per_mod(1)*1.7e-3*[0.172,0.184,0.196,0.19]; %Calculate energy per annum for each of the four models in kwh/y
 'module yield per cost estimate'
-E./[0.41*280,0.46*310,0.62*330,0.56*310];
+E./[0.41*280,0.46*310,0.62*330,0.56*310]
+
+areas = [1.627, 1.683, 1.682, 1.658];  % module areas from datasheets, corresponding to correct effs
+effs = [0.172, 0.184, 0.196, 0.190];
+
+E_acc_area = G_landscape_per_mod(1) * 1e-3 .* (areas .* effs);  % now per-model
+'module yield per cost estimate accounting for module area'
+E_acc_area./[0.41*280,0.46*310,0.62*330,0.56*310]
+% doesn't change anything wrt model choice, but is probably more precise this way
 
 %% PROBLEM 4
 % Knowing the irradiance incident on each PV module, weather parameters and the module of
@@ -184,7 +192,7 @@ avg_operating_efficiency = mean(Mod_eff(valid_hours));
 
 
 %Approximated system losses
-losses_approx = 0.15;       %decreased losses to 12% as this is more realistic for grid tied PV , based on inverter efficiency of 92% and other losses 4%
+losses_approx = 0.12;       %decreased losses to 12% as this is more realistic for grid tied PV , based on inverter efficiency of 92% and other losses 4%
 
 %effective_efficiency = mod_eff*(1-losses_approx); redundant
 %annual_yield = avg_annual_irradiation*avg_effective_efficiency; %invalid calculation method, see above
@@ -224,174 +232,246 @@ disp(Q5_resultsA_table);
 % compose your PV system, in the chosen mounting orientation. The limits of the color bar range will be
 % provided and depend on the city.
 
-% the below lines were made redundant by the new code of problem 5
+% === INPUTS from Problem 5 (assumed already in workspace) ===
+% G_module_raw          : [8760 × n_modules] POA irradiance [W/m²]
+% Mod_Voc               : [8760 × n_modules] module Voc per hour
+% STC_Pmod              : Module nominal power (W)
+% Am                    : Module area (m²)
+% STC_efficiency_mod    : Efficiency at STC
+% annual_demand         : Annual electricity consumption [kWh]
+% annual_yield          : Per-module expected yield (Wh)
+% losses_approx         : Combined system losses fraction
+% Panelselection        : Selection function (provided)
+% X_45                  : Grid independence level (%)
 
-% [G_landscape_total, G_landscape_per_mod, G_module_raw] = calculateTotalIrradiation(4, 'landscape', ...
-%     G_Bn, G_Dh, G_Gh, Az, hs);
+% select highest annual P modules
+Req_generation_X = annual_demand * (X_45 / 100) * 1.1;    % include 10% safety margin (factor 1.1)
+[selected_modules, num_panels_req, expected_yield] = Panelselection(annual_yield/1000, Req_generation_X);
 
-% annual_irradiation_per_mod = G_landscape_per_mod * 1e-3;
-% total_available_modules = length(annual_irradiation_per_mod);
+% annual irradiation per module [kWh/m²]
+annual_irradiation = sum(G_module_raw, 1) * 1e-3;
+selected_irradiation = annual_irradiation(selected_modules);
 
-% [sorted_irradiation, sort_idx] = sort(annual_irradiation_per_mod, 'descend');
+% voltage limit check and string calculation
+Voc_max = max(Mod_Voc, [], 'all', 'omitnan');
+Max_mod_per_string = floor(1000 / Voc_max * 0.9);  % 1000 V grid connected inverter voltage maximum; include 10% safety margin (factor 0.9)
+N_strings = ceil(num_panels_req / Max_mod_per_string);
 
-% if Num_Mod <= total_available_modules
-%     selected_module_idx = sort_idx(1:Num_Mod);
-%     selected_irradiation = sorted_irradiation(1:Num_Mod);
-% else
-%     fprintf('Warning: Insufficient modules available! Using all %d modules.\n', total_available_modules);
-%     selected_module_idx = sort_idx;
-%     selected_irradiation = sorted_irradiation;
-%     Num_Mod = total_available_modules;
-% end
+% assign modules to strings while minimizing losses
+sorted_modules = selected_modules;  % already sorted best-to-worst
 
-%Max_mod_strng = 20;  %From datasheet, 60 modules with 3 bypass diodes %incorrect likely
-Max_mod_string = floor(1000/max(max(Mod_Voc))*0.9)
-N_strngs = ceil(num_panels_req / Max_mod_strng);
-%% checked until here
-Mod_per_strng = floor(Num_Mod / N_strngs);
-Mod_remaining = mod(Num_Mod, N_strngs);
+string_modules = cell(N_strings, 1);
+string_irradiation = cell(N_strings, 1);
 
-%TABLE STRING CONFIGURATION
-Q6_strng_config_table = table(Max_mod_strng, N_strngs, Mod_per_strng, Mod_remaining, ...
-    'VariableNames', {'Target string size', 'Number of strings', 'Modules per string', ...
-                        'Extra modules to distribute'});
-disp('--- STRING CONFIGURATION ---');
-disp(Q6_strng_config_table);
-
-
-string_assignments = [];
-string_irradiation = cell(N_strngs, 1);
-string_modules = cell(N_strngs, 1);
-
-current_string = 1;
-direction = 1; 
-
-for i = 1:Num_Mod
-    string_assignments(end+1) = current_string;
-    current_string = current_string + direction;
+for s = 1:N_strings
+    start_idx = (s - 1) * Max_mod_per_string + 1;
+    end_idx = min(s * Max_mod_per_string, num_panels_req);
     
-    if current_string > N_strngs
-        current_string = N_strngs;
-        direction = -1;
-    elseif current_string < 1
-        current_string = 1;
-        direction = 1;
-    end
+    string_modules{s} = sorted_modules(start_idx:end_idx);
+    string_irradiation{s} = selected_irradiation(start_idx:end_idx);
 end
 
-for s = 1:N_strngs
-    string_mask = (string_assignments == s);
-    string_modules{s} = selected_module_idx(string_mask);
-    string_irradiation{s} = selected_irradiation(string_mask);
-    String_ID(s) = s;
-    Modules_per_String(s) = length(string_modules{s});
-    Mean_Irradiation(s) = mean(string_irradiation{s});
-    Std_Irradiation(s) = std(string_irradiation{s});
+% compute mismatch losses
+% Assumption: Energy yield is proportional to irradiation * module rated power (P_STC / 1000)
+% Assumes all modules operate ideally at STC efficiency (no temperature or system derating here)
+
+% Total ideal energy if each module operates at its own irradiation level
+ideal_energy = sum(selected_irradiation) * STC_Pmod / 1000;  % [kWh]
+
+% Total actual energy if each string limited by its lowest-performing module
+strings_energy = 0;
+for s = 1:N_strings
+    min_I = min(string_irradiation{s});     % worst irradiation in the string [kWh/m²]
+    n_mod = length(string_modules{s});      % number of modules in the string
+    strings_energy = strings_energy + min_I * n_mod * STC_Pmod / 1000;  % [kWh]
 end
 
-%TABLE STRING CONFIGURATION OVERVIEW
-Q6_strng_config2_table = table(String_ID', Modules_per_String', Mean_Irradiation', Std_Irradiation', ...
-    'VariableNames', {'String_ID', 'Modules', 'Mean_Irradiation_kWh_m2', 'Std_Irradiation_kWh_m2'});
-disp('--- STRING CONFIGURATION OVERVIEW ---');
-disp(Q6_strng_config2_table);
+% Mismatch loss due to series connection (in % of ideal)
+mismatch_loss_pct = (ideal_energy - strings_energy) / ideal_energy * 100;
 
 
-total_ideal_power = sum(selected_irradiation) * STC_efficiency_mod * Am * STC_Pmod / (STC_efficiency_mod * Am * 1000); 
-total_string_power = 0;
+% Summary Table
+Q6_summary_table = table(num_panels_req, num_panels_req * STC_Pmod / 1000, N_strings, ...
+     strings_energy, ...
+    strings_energy / annual_demand * 100, mismatch_loss_pct, ...
+    'VariableNames', {'Total modules', 'System power (kWp)', 'Number of strings', ...
+    'Annual generation (kWh)', 'Grid independence (excludes losses) (%)', 'Mismatch loss (%)'});
+disp('--- SUMMARY TABLE (Problem 6) ---');
+disp(Q6_summary_table);
 
-for s = 1:N_strngs
-    min_irradiation_in_string = min(string_irradiation{s});
-    modules_in_string = length(string_modules{s});
-    string_power = min_irradiation_in_string * modules_in_string * STC_efficiency_mod * Am * STC_Pmod / (STC_efficiency_mod * Am * 1000);
-    total_string_power = total_string_power + string_power;
+% Breakdown per string
+String_ID = (1:N_strings)';
+Mean_Irr = zeros(N_strings, 1);
+Std_Irr = zeros(N_strings, 1);
+Module_List = strings(N_strings, 1);
+
+for s = 1:N_strings
+    Mean_Irr(s) = mean(string_irradiation{s});
+    Std_Irr(s) = std(string_irradiation{s});
+    Module_List(s) = join(string(string_modules{s}), ', ');
 end
 
-mismatch_loss_pct = (total_ideal_power - total_string_power) / total_ideal_power * 100;
+Q6_strng_table = table(String_ID, Module_List, Mean_Irr, Std_Irr, ...
+    'VariableNames', {'String_ID', 'Modules', 'Mean_Irradiation (kWh/m²)', 'Std Dev'});
+disp('--- STRING ASSIGNMENT TABLE ---');
+disp('Connect in this order (highest to lowest irradiation) to minimize mismatch and maximize energy harvest');
+disp(Q6_strng_table);
 
-%TABLE MISMATCH VALUES
-Q6_mismatch_val_table = table(total_ideal_power, total_string_power, mismatch_loss_pct, ...
-    'VariableNames', {'Ideal annual energy (kWh)', 'String-limited energy (kWh)', 'Mismatch loss (%)'});
-disp('--- MISMATCH VALUES ---');
-disp(Q6_mismatch_val_table);
-
-
-%LAYOUT SPECS VALUES
-fprintf('\n--- LAYOUT SPECS VALUES ---\n');
-fprintf('- %d strings connected in parallel\n', N_strngs);
-fprintf('- Each string contains %d-%d modules in series\n', ...
-    min(cellfun(@length, string_modules)), max(cellfun(@length, string_modules)));
-fprintf('- All strings connected to a single inverter with %d MPPT input(s)\n', N_strngs);
-fprintf(' \n');
-
-
-String_ID2 = (1:N_strngs)';
-Modules2 = cell(N_strngs, 1);
-Mean_Irradiation2 = zeros(N_strngs, 1);
-Std_Irradiation2 = zeros(N_strngs, 1);
-
-for s = 1:N_strngs
-    modules_str = sprintf('%d,', string_modules{s});
-    Modules2{s} = modules_str(1:end-1); 
-    Mean_Irradiation2(s) = mean(string_irradiation{s});
-    Std_Irradiation2(s) = std(string_irradiation{s});
-end
-
-%TABLE STRING BREAKDOWN 
-Q6_strng_breakdown_table = table(String_ID2, Modules2, Mean_Irradiation2, Std_Irradiation2, ...
-          'VariableNames', {'String_ID', 'Modules', 'Mean_Irradiation_kWh_m2', 'Std_Irradiation_kWh_m2'});
-disp('--- STRING BREAKDOWN ---');
-disp(Q6_strng_breakdown_table);
-
-
-selected_mask = false(total_available_modules, 1);
-selected_mask(selected_module_idx) = true;
-
-color_limits = [300, 900];
+% Plot all selected modules
+color_limits = [300 900];
+modelfile = 'landscape_modules.mat';     % repeat cause I looped over all 8 roof segments earlier
 
 figure;
-modelfile = 'landscape_modules.mat';
-plotModulesOnRoof(modelfile, 4, selected_module_idx, 'irradiation', ...
+plotModulesOnRoof(modelfile, 4, selected_modules, 'irradiation', ...
     selected_irradiation, color_limits);
-title(sprintf('Segment 4: %d modules (%.1f kWp)', ...
-    Num_Mod, Num_Mod * STC_Pmod / 1000));
+title(sprintf('Segment 4 – Selected %d Modules (%.1f kWp)', ...
+    num_panels_req, num_panels_req * STC_Pmod / 1000));
 colorbar;
 saveas(gcf, fullfile('Figures', 'Problem6.fig'));
 
-
-%TABLE SUMMARY
-Q6_summary_table = table(Num_Mod, Num_Mod * STC_Pmod / 1000, N_strngs, ...
-    round(mean(cellfun(@length, string_modules))), total_string_power, ...
-    total_string_power / annual_demand * 100, mismatch_loss_pct, ...
-          'VariableNames', {'Total modules', 'System power (kWp)', 'Number of strings', ...
-    'Modules per string', 'Annual generation (kWh)', 'Grid independence (%)', 'Mismatch loss (%)'});
-disp('--- SUMMARY ---');
-disp(Q6_summary_table);
-
-%% DISCLAIMER, MOSTLY COPY PASTED FROM AI
-fprintf('\n=== ARRAY VISUALIZATION OF MODULES ===\n');
-for s = 1:N_strngs
-    figure('Name', sprintf('String %d Details', s), 'NumberTitle', 'off');
-    
-    current_string_modules = string_modules{s};
-    current_string_irradiation = string_irradiation{s};
-    
-    plotModulesOnRoof(modelfile, 4, current_string_modules, 'irradiation', ...
-        current_string_irradiation, color_limits);
-    
-    title(sprintf('String %d: %d Modules (%.1f±%.1f kWh/m²)', ...
-        s, length(current_string_modules), ...
-        mean(current_string_irradiation), std(current_string_irradiation)));
-    
-    colorbar;
-    text(0.98, 0.98, sprintf('Modules: [%s]', ...
-        sprintf('%d, ', current_string_modules)), ...
-        'Units', 'normalized', ...
-        'HorizontalAlignment', 'right', ...
-        'VerticalAlignment', 'bottom', ...
-        'BackgroundColor', 'white', ...
-        'EdgeColor', 'black', ...
-        'FontSize', 6, ...
-        'Interpreter', 'none');
-    
-    fprintf('Created figure for String %d with %d modules\n', s, length(current_string_modules));
+% Plot each string individually (not asked by problem statement)
+for s = 1:N_strings
+    figure('Name', sprintf('String %d', s), 'NumberTitle', 'off');
+    plotModulesOnRoof(modelfile, 4, string_modules{s}, 'irradiation', ...
+        string_irradiation{s}, color_limits);
+    title(sprintf('String %d – %d Modules (%.1f ± %.1f kWh/m²)', ...
+        s, length(string_modules{s}), Mean_Irr(s), Std_Irr(s)));
 end
+
+%% PROBLEM 7
+% Keeping in mind the electrical layout of your PV array(s), calculate the
+% DC electrical power generated by the solar panels of your PV array(s) for
+% every hour during an entire year using climate data and taking into
+% account efficiency losses due to temperature effects. Account for the
+% mismatch between PV modules by using the code provided6. We want you to
+% report the IV curve of each string of your system at 12:00 on 21st June
+% and to complete the following table (one row per string).
+
+%% First, calculate total annual DC power generated from selected modules
+% under consideration of temperature effects limiting efficiency and
+% current mismatch
+
+% Initialize output matrices
+Pmpp_hourly = zeros(8760, N_strings);
+Impp_hourly = zeros(8760, N_strings);
+Vmpp_hourly = zeros(8760, N_strings);
+
+% Calculate Fill Factor from solar module data sheet values
+Fill_Factor = (STC_Vmp * STC_Imp) / (STC_Voc * STC_Isc);  % ≈ 0.796
+
+
+for s = 1:N_strings
+    % Extract module indices for the current string
+    mod_ids = string_modules{s};
+
+    % Get hourly Isc and Voc for all modules in this string
+    iscs = Mod_Isc(:, mod_ids);   % [8760 × n_mod]
+    vocs = Mod_Voc(:, mod_ids);   % [8760 × n_mod]
+
+    % Replace NaNs with zeros (non-generating or invalid modules)
+    vocs(isnan(vocs)) = 0;
+    iscs(isnan(iscs)) = 0;
+
+    % Compute MPP values using provided function
+    [Pmpp_str, Impp_str, Vmpp_str] = calculateMPPForSeries(iscs, vocs, ...
+        Fill_Factor, STC_Imp, STC_Isc);
+
+    % Store results for this string
+    Pmpp_hourly(:, s) = Pmpp_str;  % [W]
+    Impp_hourly(:, s) = Impp_str;
+    Vmpp_hourly(:, s) = Vmpp_str;
+end
+
+% Total generated power
+total_Pmpp = sum(Pmpp_hourly, 2);                   % [W]
+total_energy_generated = sum(total_Pmpp) / 1000;    % [kWh]
+
+% summary output
+fprintf('=== Annual DC Output Summary ===\n');
+fprintf('Total DC energy output: %.1f kWh\n', total_energy_generated);
+fprintf('DC Grid independence: %.1f %%\n', 100 * total_energy_generated / annual_demand);
+
+%% Second, generate the IV curve of each string at 12:00 noon on June 21st (summer solstice)
+
+% Time index for June 21st, 12:00
+dt = datetime(2023, 1, 1, 0, 0, 0) + hours(0:length(Mod_Isc)-1);
+target_time = datetime(2023, 6, 21, 12, 0, 0);
+time_idx = find(dt == target_time);
+
+for s = 1:N_strings
+    module_idx = string_modules{s};
+
+    vocs_now = Mod_Voc(time_idx, module_idx);
+    iscs_now = Mod_Isc(time_idx, module_idx);
+
+    % Sort by descending Isc (bypass logic)
+    [iscs_sorted, idx] = sort(iscs_now, 'descend');
+    vocs_sorted = vocs_now(idx);
+
+    % Compute cumulative voltage and step currents
+    Vk = cumsum(vocs_sorted);
+    Ik = iscs_sorted;
+
+    % Table to summarize string stats
+    IV_table = table('Size', [N_strings, 7], ...
+    'VariableTypes', repmat({'double'}, 1, 7), ...
+    'VariableNames', {'String', 'ISC_min', 'ISC_max', 'VOC_min', 'VOC_max', 'Pmin', 'Pmax'});
+
+    for s = 1:N_strings
+        module_idx = string_modules{s};
+        vocs_now = Mod_Voc(time_idx, module_idx);
+        iscs_now = Mod_Isc(time_idx, module_idx);
+    
+        valid = ~isnan(vocs_now) & ~isnan(iscs_now);
+        vocs_now = vocs_now(valid);
+        iscs_now = iscs_now(valid);
+    
+        [iscs_sorted, idx] = sort(iscs_now, 'descend');
+        vocs_sorted = vocs_now(idx);
+        Ik = iscs_sorted;
+        Vk = cumsum(vocs_sorted);
+        Pk = Ik .* Vk;
+        
+        IV_table.String(s) = s;
+        IV_table.ISC_min(s) = min(Ik);
+        IV_table.ISC_max(s) = max(Ik);
+        IV_table.VOC_min(s) = min(vocs_sorted);
+        IV_table.VOC_max(s) = sum(vocs_sorted);  % full string voltage
+        IV_table.Pmin(s) = Fill_Factor * min(Pk);
+        IV_table.Pmax(s) = Fill_Factor * max(Pk);
+    end
+
+disp('=== IV Table for 21st June 12:00 ===');
+disp(IV_table);
+
+
+    % Add initial and final steps for full stair-step plot
+    V_plot = [];
+    I_plot = [];
+
+    V_prev = 0;
+    for k = 1:length(Vk)
+        V_now = Vk(k);
+        I_now = Ik(k);
+        V_plot = [V_plot, V_prev, V_now];
+        I_plot = [I_plot, I_now, I_now];
+        V_prev = V_now;
+    end
+
+    % Plot stair-step IV curve
+    fig = figure('Name', sprintf('String %d IV Stair-Step', s), ...
+                 'NumberTitle', 'off');
+    plot(V_plot, I_plot, 'LineWidth', 2);
+    xlabel('Voltage [V]');
+    ylabel('Current [A]');
+    title(sprintf('IV Curve, String %d (21st June, 12:00)', s));
+    grid on;
+    xlim([0, Vk(end)]);
+    ylim([Ik(end) * 0.95, Ik(1) * 1.05]);
+    legend('IV Curve', 'Location', 'northeast');
+
+    % Save as .fig
+    saveas(fig, fullfile('Figures', sprintf('Problem7_String%d.fig', s)));
+end
+
+%% PROBLEM 8

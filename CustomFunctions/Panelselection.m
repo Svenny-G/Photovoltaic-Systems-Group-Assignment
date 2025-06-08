@@ -1,4 +1,5 @@
 function [selected_modules,num_panels_req,expected_yield] = Panelselection(annual_yield,Req_generation_X)
+
     [sorted_yield, sorted_indices] = sort(annual_yield, 'descend');
 
     cumsumyield = cumsum(sorted_yield);
