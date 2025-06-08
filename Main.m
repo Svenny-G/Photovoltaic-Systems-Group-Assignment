@@ -60,10 +60,12 @@ grid on;
 % Take into account direct, diffuse, and reflected components of the POA irradiance.
 % Choose mounting orientation based on the higher total annual irradiation.
 
+Am = 1.7;  % module area
+
 chosen_orientation = strings(1, 8);  % Store best orientation per segment
 
-% loop over all 8 roof segments
-for segment = 1:8
+% loop over all 8 roof segments -> oops, just segment 4 relevant
+for segment = 4
     % Compute total irradiation for each orientation
     [G_portrait_total, G_portrait_per_mod, G_module_raw] = calculateTotalIrradiation(segment, 'portrait', ...
         G_Bn, G_Dh, G_Gh, Az, hs);
@@ -88,22 +90,22 @@ for segment = 1:8
         G_best = G_landscape_per_mod;
     end
 
-    % Compute annual irradiation per module [kWh/m²]
-    annual_kWh_per_m2 = G_best * 1e-3;
+    % Compute annual irradiation per module [kWh/m²/y]
+    annual_MWh_per_m2 = G_best * 1e-6;     % divide by module area
 
     % Plot only the chosen orientation
     modelfile = sprintf('%s_modules.mat', chosen_orientation(segment));
-    m_ix = 1:length(annual_kWh_per_m2);
+    m_ix = 1:length(annual_MWh_per_m2);
 
-    color_limits = [300 900];  % exceeds min/max of module irradiations
+    color_limits = [0.26 0.48];  % exceeds min/max of module irradiations, given in assignment
     
     %test
-    %fprintf('  Max module: %.2f kWh/m²\n', max(annual_kWh_per_m2));
-    %fprintf('  Min module: %.2f kWh/m²\n', min(annual_kWh_per_m2));
+    fprintf('  Max module: %.2f kWh/m²/y\n', max(annual_MWh_per_m2));
+    fprintf('  Min module: %.2f kWh/m²/y\n', min(annual_MWh_per_m2));
 
     figure;
     plotModulesOnRoof(modelfile, segment, m_ix, 'irradiation', ...
-        annual_kWh_per_m2, color_limits);
+        annual_MWh_per_m2, color_limits);
     title(sprintf('Segment %d - %s (chosen)', segment, chosen_orientation(segment)));
 end
 
@@ -183,7 +185,7 @@ Mod_Voc = STC_Voc*ones(length(FF),n_modules)+kb_T/q*T_mod.*log(G_mod_mask/1000)+
 Mod_Isc = STC_Isc*G_mod_mask/1000 + STC_Isc*TC_Isc*(T_mod-T25);
 Mod_Pmpp= 0.74*Mod_Voc.*Mod_Isc;
 Mod_Pmpp(Mod_Pmpp<=0)=NaN;
-Mod_eff = Mod_Pmpp./G_mod_mask/Am;
+Mod_eff = Mod_Pmpp./G_mod_mask;
 
 valid_hours = ~isnan(Mod_eff) & G_module_raw > 0 & Mod_eff > 0 ;
 avg_operating_efficiency = mean(Mod_eff(valid_hours));

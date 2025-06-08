@@ -12,6 +12,7 @@ function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_
 %
 % Output:
 %   G_total     - 8760x1 vector of total irradiance summed over all modules
+    Am = 1.7;    % module area
     Az_fix = Az+180;
     % Map segment to facing direction and tilt
     dirs = ["south", "north", "west", "east"];
@@ -62,11 +63,11 @@ function [G_total, G_module_matrix, G_module_raw] = calculateTotalIrradiation(s_
     end
     
     % Total annual irradiance per module in n_modules
-    G_module_matrix = sum(G_direct_module + G_diffuse_module + G_albedo_module, 1);  % [1 × N_modules]
+    G_module_matrix = sum(G_direct_module + G_diffuse_module + G_albedo_module, 1) / Am;  % [1 × N_modules]
 
     % Total POA irradiance per hour (summed over modules)
-    G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2);
+    G_total = sum(G_direct_module + G_diffuse_module + G_albedo_module, 2) / Am;
 
     % Later problems require also hourly data per module
-    G_module_raw = G_direct_module + G_diffuse_module + G_albedo_module;
+    G_module_raw = (G_direct_module + G_diffuse_module + G_albedo_module) / Am;
 end
