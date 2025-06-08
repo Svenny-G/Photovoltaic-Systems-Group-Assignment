@@ -654,18 +654,27 @@ end
 
 
 %the code below is adapted from problem 7 to prepare iscs and vocs inputs for the calculateMPPForParallel funtion
-iscs = zeros((N_strings,))
+iscs = []
+vocs = []
 for s = 1:N_strings
     % Extract module indices for the current string
     mod_ids = string_modules{s};
-
+    pad_iscs = [Mod_Isc(time_idx,mod_ids),zeros(1,(Max_mod_per_string-length(mod_ids)))];
+    pad_vocs = [Mod_Voc(time_idx,mod_ids),zeros(1,(Max_mod_per_string-length(mod_ids)))];
     % Get hourly Isc and Voc for all modules in this string
-    iscs(s) = Mod_Isc(:, mod_ids);   % [8760 × n_mod]
-    vocs(s) = Mod_Voc(:, mod_ids);   % [8760 × n_mod]
-
-    % Replace NaNs with zeros (non-generating or invalid modules)
-    vocs(isnan(vocs)) = 0;
-    iscs(isnan(iscs)) = 0;
+    iscs = vertcat(iscs,pad_iscs);
+    vocs = vertcat(vocs,pad_vocs);
 end
+vocs(isnan(vocs)) = 0;
+iscs(isnan(iscs)) = 0;
+[pmpp_sys, impp_sys, vmpp_sys, impp_str] = calculateMPPForParallel(iscs, vocs, Fill_Factor, STC_Imp, STC_Isc);
 
-[pmpp_sys, impp_sys, vmpp_sys, impp_str] = calculateMPPForParallel(iscs, vocs, Fill_Factor, STC_Imp, STC_Isc)
+Names = ['Fronius International GmbH: Fronius Primo 3.8-1 208-240 [240V]','Fronius International GmbH: Fronius Primo 5.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 6.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 7.6-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 8.2-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 10.0-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 11.4-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 12.5-1 208-240 [240V]', 'Fronius International GmbH: Fronius Primo 15.0-1 208-240 [240V]']
+Psos = [53.2488, 40.4138, 50.0694, 38.7693, 37.9417, 44.2769, 49.1389, 45.21, 55.7458]
+Pacos = []
+
+
+% Table to summarize string stats
+% Inverter_table = table(Names, Pso, Paco, Pdco, Vdco, C0, C1, C2, C3, ...
+%     'VariableNames', {'Name', 'Pso', 'Paco','Pdco', 'Vdco', 'C0', 'C1', 'C2','C3'});
+
