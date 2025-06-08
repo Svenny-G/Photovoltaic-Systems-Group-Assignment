@@ -651,3 +651,21 @@ end
 %% PROBLEM 10
 % Choose the inverter(s) from the table provided. Clearly explain your DC/AC ratio choice. Assume
 % that each inverter has only one MPPT7
+
+
+%the code below is adapted from problem 7 to prepare iscs and vocs inputs for the calculateMPPForParallel funtion
+iscs = zeros((N_strings,))
+for s = 1:N_strings
+    % Extract module indices for the current string
+    mod_ids = string_modules{s};
+
+    % Get hourly Isc and Voc for all modules in this string
+    iscs(s) = Mod_Isc(:, mod_ids);   % [8760 × n_mod]
+    vocs(s) = Mod_Voc(:, mod_ids);   % [8760 × n_mod]
+
+    % Replace NaNs with zeros (non-generating or invalid modules)
+    vocs(isnan(vocs)) = 0;
+    iscs(isnan(iscs)) = 0;
+end
+
+[pmpp_sys, impp_sys, vmpp_sys, impp_str] = calculateMPPForParallel(iscs, vocs, Fill_Factor, STC_Imp, STC_Isc)
