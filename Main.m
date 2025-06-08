@@ -91,21 +91,21 @@ for segment = 4
     end
 
     % Compute annual irradiation per module [kWh/m²/y]
-    annual_MWh_per_m2 = G_best * 1e-6;     % divide by module area
+    annual_MWh_per_module = G_best * 1e-6 / Am;    % divide by module area
 
     % Plot only the chosen orientation
     modelfile = sprintf('%s_modules.mat', chosen_orientation(segment));
-    m_ix = 1:length(annual_MWh_per_m2);
+    m_ix = 1:length(annual_MWh_per_module);
 
     color_limits = [0.26 0.48];  % exceeds min/max of module irradiations, given in assignment
     
     %test
-    fprintf('  Max module: %.2f kWh/m²/y\n', max(annual_MWh_per_m2));
-    fprintf('  Min module: %.2f kWh/m²/y\n', min(annual_MWh_per_m2));
+    fprintf('  Max module: %.2f kWh/m²/y\n', max(annual_MWh_per_module));
+    fprintf('  Min module: %.2f kWh/m²/y\n', min(annual_MWh_per_module));
 
     figure;
     plotModulesOnRoof(modelfile, segment, m_ix, 'irradiation', ...
-        annual_MWh_per_m2, color_limits);
+        annual_MWh_per_module, color_limits);
     title(sprintf('Segment %d - %s (chosen)', segment, chosen_orientation(segment)));
 end
 
@@ -320,12 +320,17 @@ disp('Connect in this order (highest to lowest irradiation) to minimize mismatch
 disp(Q6_strng_table);
 
 % Plot all selected modules
-color_limits = [300 900];
+color_limits = [0.26 0.48];
 modelfile = 'landscape_modules.mat';     % repeat cause I looped over all 8 roof segments earlier
+
+selected_irradiation_per_mod = selected_irradiation * 1e-3 / Am;   % scaled per module and to MWh
+for s = 1:N_strings
+    string_irradiation_per_mod{s} = string_irradiation{s} * 1e-3 / Am;
+end
 
 figure;
 plotModulesOnRoof(modelfile, 4, selected_modules, 'irradiation', ...
-    selected_irradiation, color_limits);
+    selected_irradiation_per_mod, color_limits);
 title(sprintf('Segment 4 – Selected %d Modules (%.1f kWp)', ...
     num_panels_req, num_panels_req * STC_Pmod / 1000));
 colorbar;
@@ -335,7 +340,7 @@ saveas(gcf, fullfile('Figures', 'Problem6.fig'));
 for s = 1:N_strings
     figure('Name', sprintf('String %d', s), 'NumberTitle', 'off');
     plotModulesOnRoof(modelfile, 4, string_modules{s}, 'irradiation', ...
-        string_irradiation{s}, color_limits);
+        string_irradiation_per_mod{s}, color_limits);
     title(sprintf('String %d – %d Modules (%.1f ± %.1f kWh/m²)', ...
         s, length(string_modules{s}), Mean_Irr(s), Std_Irr(s)));
 end
